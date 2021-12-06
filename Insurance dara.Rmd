@@ -1,0 +1,225 @@
+---
+title: "Insurance"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+The read.csv is used to import the data, and file.choose helps one bypass the troubles of setting working directory.
+
+Let's dig into the insurance data set.
+
+```{r}
+insurance<-read.csv(file.choose(),header=T)
+```
+
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(scales)
+library(extrafont)
+```
+
+Some times I pick and choose between head and View. But I use them to have a quick preview about the data.
+
+```{r}
+View(insurance)
+
+head(insurance, 10)
+```
+
+
+Let's see how R imported the data. A close look at data types
+
+```{r}
+str(insurance)
+```
+Now some data Viz to explore what our data looks like.
+
+First I'll like to see the spread age data by sex. Do we have older males or females.  
+```{r}
+ggplot(insurance)+
+  geom_boxplot(aes(sex,  age))+theme_classic()
+
+
+```
+
+From the box plot the data the age data looks spread evenly between male and female, I'll take a closer look using the dotplot geom
+
+```{r}
+ggplot(insurance)+
+  geom_dotplot(aes(sex,  age), binaxis="y", dotsize=1, binwidth=0.5, stackdir="center")+theme_classic()
+```
+The dotplot shoes us something interesting in the ~20 age group. Younger study population?
+
+Time to visualize the age distribution by region and smoking
+
+```{r}
+ggplot(insurance)+
+  geom_boxplot(aes(sex,  age, color=sex))+theme_classic() +facet_grid(~region)
+
+
+```
+
+```{r}
+ggplot(insurance)+
+  geom_boxplot(aes(sex,  age, color=smoker))+theme_classic() +facet_grid(~smoker)
+```
+
+Some summary analysis to view the charges by region grouping the data by sex.
+
+First I'll create a summary data to view the average charges by region
+
+```{r}
+charges_by_region <- insurance %>% 
+  group_by(region) %>%
+  summarise(Avg_region_charges=mean(charges)) %>% ungroup
+
+charges_by_region
+```
+
+Time to visualize 
+
+```{r}
+charges_by_region %>% 
+ ggplot(aes(reorder(region,Avg_region_charges),Avg_region_charges,fill=region))+
+  geom_col(show.legend = FALSE,color="black")+
+geom_text(aes(label=comma(Avg_region_charges)),size=3,hjust=1,color="black")+
+  scale_fill_brewer(palette = "Paired")+
+  coord_flip()+
+  theme_classic()+
+  labs(title = "Average Insurance Charges by Region",x="region",y= "Charges") 
+```
+
+
+
+Next We visualize Charges by sex
+
+```{r}
+charges_by_sex <- insurance %>% 
+  group_by(sex) %>%
+  summarise(Avg_region_charges_sex=mean(charges)) %>% ungroup
+
+charges_by_sex
+```
+
+Males are charges more? Does our data have any answer to this? Do we have more males in the southeast? Does smoking status or BMI affect charges? 
+
+Lets get on some visualizations to answer these questions.
+
+```{r}
+ggplot(insurance)+
+  geom_point(aes(bmi,charges, color=charges, size=charges))+
+  scale_color_gradient(low="orange", high="purple")+
+  theme_classic()+
+  labs(title = "Charges by BMI",x="BMI",y= "Charges") 
+ 
+```
+Lets View this data by Region and Sex
+
+```{r}
+ggplot(insurance)+
+  geom_point(aes(bmi,charges, color=charges))+
+  scale_color_gradient(low="orange", high="purple")+
+  theme_classic()+
+  labs(title = "Charges by BMI",x="BMI",y= "Charges") + facet_grid(.~region+sex)
+
+```
+
+FIrst we see that most of the charges are below 20000, also there is no defined relationship between charges and bmi. 
+Can age be the answer?
+
+```{r}
+ggplot(insurance)+
+  geom_point(aes(age,charges, color=charges))+
+  scale_color_gradient(low="orange", high="purple")+
+  theme_classic(base_size=15)+
+  labs(title = "Charges by AGE",x="AGE",y= "Charges") 
+```
+
+
+
+
+```{r}
+lmBMI = lm(charges~bmi, data = insurance)
+summary(lmBMI)
+```
+The BMi is a good addition to the model P = 2.46e-13 ***, However the R square shows that this model is a poor fit for the data. 
+
+Now lets try charges by age
+
+
+```{r}
+lmage = lm(charges~age, data = insurance)
+summary(lmage)
+```
+
+
+Similarly the age is a good predictor for the model as the P value is < 2e-16. However this model explains only 9 percent of the variation in the model. 
+
+Human studies typically have low R2 because of unpredictability, but will 4 percent or 9 percent explained variation pass ? I don't don't so.
+
+I'll try a multiple regression before I come to initial conclusions. 
+
+```{r}
+lmagebmi = lm(charges~age + bmi, data = insurance)
+summary(lmagebmi)
+```
+
+VIola! both age and bmi are good predictors for charges, however their R2 is only 12 percent. Is this model useable? Yes!First this data set might be a subset of a large data set and the sample size has been reduced, also, this might be a streamlined data set, where other variables that will bolster the model have been removed.
+
+I added children to the regression and the R2 increased to 13 percent.
+
+What is your take on this interpretation. 
+
+
+
+Final phase of working with this data, I want to answer the question " Does region, smoker or sex" have any effect on charges
+
+
+The first thing I do is ensure I have my factors in place and check the data types after chnaging them.
+
+```{r}
+insurance$sex=as.factor(insurance$sex)
+
+insurance$smoker=as.factor(insurance$smoker)
+
+insurance$region=as.factor(insurance$region)
+
+str(insurance)
+```
+```{r}
+insaov=aov(charges~(smoker*sex)+region,data=insurance)
+anova(insaov)
+```
+Now it all makes sense!!!!!!! Charges is statistically similar for sex and region!!! Though I blocked by region, which is a random factor. I didn't expect a difference in charges by region.
+
+Now lets do the final visualizations to see what the data looks like by smoking....
+
+```{r}
+charges_by_smoke <- insurance %>% 
+  group_by(smoker) %>%
+  summarise(Avg_smoke_charges=mean(charges)) %>% ungroup
+
+charges_by_smoke
+```
+
+```{r}
+charges_by_smoke %>% 
+ ggplot(aes(reorder(smoker,Avg_smoke_charges),Avg_smoke_charges,fill=smoker))+
+  geom_col(show.legend = FALSE,color="black")+
+geom_text(aes(label=comma(Avg_smoke_charges)),size=5,hjust=1,color="black")+
+  scale_fill_brewer(palette = "Paired")+
+  coord_flip()+
+  theme_classic()+
+  labs(title = "Average Insurance Charges by Smoking",x="Smoker",y= "Charges") 
+```
+The End on today's episode of telling stories with datasets. 
